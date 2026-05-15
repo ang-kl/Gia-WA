@@ -1,0 +1,26 @@
+name: Publish Flows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/flows/*.json'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish DRAFT Flow versions to Meta
+    runs-on: ubuntu-latest
+    if: ${{ vars.PUBLISH_FLOWS_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm install --ignore-scripts
+      - run: node scripts/publish-flow.mjs
+        env:
+          WA_BUSINESS_TOKEN: ${{ secrets.WA_BUSINESS_TOKEN }}
+          WA_BUSINESS_ACCOUNT_ID: ${{ secrets.WA_BUSINESS_ACCOUNT_ID }}
+          WA_GRAPH_API_VERSION: v21.0

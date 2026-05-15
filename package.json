@@ -1,0 +1,24 @@
+{
+  "name": "gia-wa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WhatsApp-native equivalent of Soleat (Gia4lunch). Llama-only AI posture. See BUILD-PLAN.md.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "syntax": "find . -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}

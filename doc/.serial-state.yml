@@ -1,0 +1,16 @@
+counters:
+  commit: 1
+  build: 0
+  documents:
+    journal: 1
+    register: 0
+    decisions: 1
+sessions:
+  current_chat_id: 2026-05-15-bootstrap
+  current_chat_counter: 1
+last_anchor_time: 15-05_26 14:44 SGT
+last_anchor_source: server_http_date_header_local_proxy
+last_anchor_iso8601: 2026-05-15T14:44:00+08:00
+last_anchor_utc: 2026-05-15T06:44:00Z
+project: Gia-WA
+project_version: 0.1.0
