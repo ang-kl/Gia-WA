@@ -1,0 +1,30 @@
+{
+  "_comment": "Stub — WhatsApp Flow definition for cuisine filter UI → results",
+  "version": "3.1",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "FILTER": ["RESULTS"]
+  },
+  "screens": [
+    {
+      "id": "FILTER",
+      "title": "Filter Cuisine",
+      "terminal": false,
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": []
+      }
+    },
+    {
+      "id": "RESULTS",
+      "title": "Results",
+      "terminal": true,
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": []
+      }
+    }
+  ]
+}

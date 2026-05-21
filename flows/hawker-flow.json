@@ -1,0 +1,30 @@
+{
+  "_comment": "Stub — WhatsApp Flow definition for nearby hawker centres → save",
+  "version": "3.1",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "NEARBY": ["DETAIL"]
+  },
+  "screens": [
+    {
+      "id": "NEARBY",
+      "title": "Nearby Hawker Centres",
+      "terminal": false,
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": []
+      }
+    },
+    {
+      "id": "DETAIL",
+      "title": "Hawker Centre",
+      "terminal": true,
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": []
+      }
+    }
+  ]
+}
