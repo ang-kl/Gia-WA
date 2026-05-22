@@ -24,7 +24,7 @@
 
 Build the WhatsApp-native equivalent of Soleat: a conversational venue-recommender for Raffles Place lunch decisions ("Gia4lunch"), delivered over the WhatsApp Business Cloud API. Same problem domain, same data, **different transport and different AI vendor**. The Telegram product keeps running, untouched, on `ang-kl/gia`.
 
-**Success looks like**: a user in WhatsApp can (a) say what they feel like eating, (b) share location, (c) get a top-5 ranked list of nearby lunch venues with rationale, (d) optionally drill in via a Flow form. All powered by Meta Llama (no Anthropic), running on the same vault/cuisine data as Soleat.
+**Success looks like**: a user in WhatsApp can (a) say what they feel like eating, (b) share location, (c) get a top-5 ranked list of nearby lunch venues with rationale, (d) optionally drill in via a Flow form. All powered by Google Gemini (no Anthropic), running on the same vault/cuisine data as Soleat.
 
 ---
 
@@ -34,7 +34,7 @@ These have been issued in chat across multiple sessions. The receiving session m
 
 | # | Directive | Authority / origin | Implication |
 |---|---|---|---|
-| D-1 | **AI posture is "Meta Llama only" — no Anthropic SDK in Gia-WA.** **`[REVISED 2026-05-22 — see ADR-002]`** Gemini is now permitted **solely** for the Hidden-Gems / R.E.D path via a plain Google AI Studio key; the main AI layer (`classify` / `converse` / `stage-a` / `sanctuary`) stays Llama-only. | Operator, rev. 3 of the WhatsApp-port discussion; revised by operator 2026-05-22. | No `@anthropic-ai/sdk` dependency. No Claude API calls. Main AI layer = Llama via Groq (primary) / Together AI (fallback). Gemini allowed for the R.E.D path only — `GEMINI_API_KEY`, plain Google AI Studio (see ADR-002). |
+| D-1 | **AI posture: no Anthropic SDK in Gia-WA.** **`[REVISED 2026-05-22 (#1) — ADR-002]`** **`[REVISED 2026-05-22 (#2) — ADR-004: Gemini-first]`** The **entire** AI layer (`classify` / `converse` / `stage-a` / `sanctuary` / `hidden-gems`) runs on Google Gemini. The original "Meta Llama only" posture and ADR-002's "Gemini-for-R.E.D-only" scoping are both superseded; Llama / Groq / Together AI are dropped. | Operator, rev. 3 of the WhatsApp-port discussion; revised by operator 2026-05-22 (twice). | No `@anthropic-ai/sdk`, no Claude API calls. Whole AI layer = Google Gemini via a plain Google AI Studio key (`GEMINI_API_KEY`) — not Vertex, not a GCP service-account. No Groq / Together. See ADR-004. |
 | D-2 | **Zero edits to `ang-kl/gia` source code from Gia-WA work.** | Operator: *"Don't touch my codes here."* | The bridge from §8.1 is read-only. Any change to `ang-kl/gia` needed to enable Gia-WA must be raised as a separate PR on that repo by a different session. |
 | D-3 | **`Gia-WA` is its own repository, not a subdirectory.** | Operator pivot, 2026-05-15 (current session). | All files under `ang-kl/Gia-WA`. The `Gia-WA/README.md` in `ang-kl/gia` is a pointer only (post-#426). |
 | D-4 | **Standing rule: after opening any PR, and after a PR merges, record it in the Journal.** | Operator: recorded as G3 in `journal-0_60_144-13_05_26-0900.md` of `ang-kl/gia`. | Applies to Gia-WA too, on its own Journal under `Gia-WA/doc/Journal/`. |
@@ -99,7 +99,7 @@ Gia-WA imports these read-only via the bridge in §8.1 (wired — ADR-003).
 - The 5 Mini Apps (UI is Telegram-WebApp-specific; WhatsApp Flows replace only Cuisine and possibly Hawker — see §5).
 - The Telegram-bot framework, inline keyboards, callback queries — all replaced by WhatsApp message primitives.
 - `twa-auth.js`, webhook-secret check, `web_app_data` handler — replaced by WhatsApp's own signature scheme and Flow Data Channel.
-- ~~The Gemini Hidden-Gems R.E.D template path.~~ **[REVISED — ADR-002, 2026-05-22]** Now **in scope**: the operator raised it, and Gemini is authorised solely for the R.E.D path, scheduled as **Phase 5** (§12). The main AI layer still stays Llama-only.
+- ~~The Gemini Hidden-Gems R.E.D template path.~~ **[REVISED — ADR-002, then ADR-004, 2026-05-22]** Now **in scope** as **Phase 5** (§12). Under ADR-004 (Gemini-first) the whole AI layer is Gemini, so R.E.D is no longer a special-vendor path — just a feature phase.
 
 ---
 
@@ -229,9 +229,8 @@ ang-kl/Gia-WA/
 │   │   ├── onFlowReply.js    # nfm_reply → search backend → result message
 │   │   └── onLocation.js     # location share → cuisine/hawker entry
 │   ├── ai/
-│   │   ├── llama.js          # Groq primary + Together fallback. JSON-mode, fn-calling, streaming.
-│   │   ├── gemini.js         # Google AI Studio client — R.E.D / Hidden-Gems path only (ADR-002)
-│   │   ├── router.js         # per-task model selection (3.1-8B / 3.3-70B / 3.2-11B-vision)
+│   │   ├── gemini.js         # Google AI Studio REST client — the whole AI layer (ADR-004). Structured output, fn-calling, model-chain fallback.
+│   │   ├── router.js         # per-task model selection (Gemini 2.5 Flash / 2.5 Pro)
 │   │   ├── dedup.js          # Redis-backed (lang, text-hash) → response, 60s TTL
 │   │   ├── telemetry.js      # per-call input/output token logging
 │   │   ├── tools/
@@ -252,8 +251,8 @@ ang-kl/Gia-WA/
 ├── __tests__/
 │   ├── crypto.test.js        # Meta-published Flow encryption test vectors
 │   ├── format.test.js        # WhatsApp markup escape (star, underscore, tilde, backtick)
-│   ├── router.test.js        # llama.js routes classifier→8B, Stage-A→70B
-│   ├── ai-fallback.test.js   # Groq 429 → Together failover
+│   ├── router.test.js        # router routes classifier→Flash, Stage-A→Pro
+│   ├── ai-fallback.test.js   # Gemini 429 → within-Gemini model-chain fallback
 │   ├── onFlowReply.test.js   # nfm_reply payload round-trip
 │   └── handlers/             # one .test.js per handler
 ├── scripts/
@@ -276,11 +275,11 @@ ang-kl/Gia-WA/
 - **`src/flows/crypto.js`** — pure functions: `decryptRequest({ encrypted_aes_key, encrypted_flow_data, initial_vector }, privateKeyPem)` → `{ action, screen, data }`. `encryptResponse(payload, aesKey, requestIV)` → **base64-encoded ciphertext string** (NOT a JSON object — Meta's Flow Data Channel expects the encrypted bytes, base64-encoded, as the **raw HTTP response body**; `server.js` does `res.type('text/plain').send(encryptResponse(...))`). **Flipped-IV is hard-coded inside `encryptResponse` to prevent the day-1 bug.** [Codex-flagged 2026-05-15 on PR #439, line 266.]
 - **`src/flows/sign.js`** — `verifyHubSignature(rawBody, header, appSecret)` → boolean. Use timing-safe compare.
 - **`src/flows/handler.js`** — routes the decrypted action: `INIT` → initial screen + data; `data_exchange` → next screen given submitted form; `BACK` → previous screen; `ping` → `{ data: { status: "active" } }`. Pure-ish; defers business logic to `src/handlers/onFlowReply.js`-style code only for terminal submissions, but a Flow can also short-circuit and complete inside `data_exchange` if Meta routes it that way.
-- **`src/handlers/onMessage.js`** — dispatches an inbound chat message. For text: classify via `ai/router.js` → if "venue intent", ask for location or open Cuisine Flow; else converse with `ai/llama.js` (3.3-70B). For list/button replies: lookup the option, route. For location: hand to `src/handlers/onLocation.js`.
+- **`src/handlers/onMessage.js`** — dispatches an inbound chat message. For text: classify via `ai/router.js` → if "venue intent", ask for location or open Cuisine Flow; else converse with `ai/gemini.js` (2.5 Flash). For list/button replies: lookup the option, route. For location: hand to `src/handlers/onLocation.js`.
 - **`src/handlers/onFlowReply.js`** — receives `nfm_reply` (the Flow's terminal payload). Runs the venue search (Stage-A → executor → vault lookup → optional web-search tool loop) and sends results back as a text or image+text message.
-- **`src/ai/llama.js`** — OpenAI-compatible wrapper for Groq (primary) and Together AI (fallback). Supports `chat.completions.create` with `response_format: { type: 'json_object' }` and `tools` (function-calling). Streaming variant for long responses. Auto-fallback on Groq 429 / 5xx. Per-call token telemetry to `telemetry.js`.
-- **`src/ai/router.js`** — pure function `pick(task: 'classify' | 'converse' | 'stage-a' | 'sanctuary' | 'vision')` → `{ provider, model, temperature, response_format }`. Single place to change model assignments.
-- **`src/ai/dedup.js`** — 60 s `(lang, sha256(text))` → response cache in Redis. Saves repeat costs since prompt caching is unavailable (D-1).
+- **`src/ai/gemini.js`** — Google AI Studio (Gemini) client over the `axios` REST dep. Supports structured output (`responseMimeType: 'application/json'` + `responseSchema`) and function-calling (`tools` / `functionDeclarations`). Within-Gemini model-chain fallback on 429 / 5xx / timeout (§7.1). Per-call token telemetry to `telemetry.js`.
+- **`src/ai/router.js`** — pure function `pick(task: 'classify' | 'converse' | 'stage-a' | 'sanctuary' | 'hidden-gems')` → `{ model, temperature, responseSchema }`. Single place to change Gemini model assignments.
+- **`src/ai/dedup.js`** — 60 s `(lang, sha256(text))` → response cache in Redis. Catches duplicate-request bursts (refresh-spam, double-tap).
 - **`src/ai/telemetry.js`** — appends `{ timestamp, task, provider, model, input_tokens, output_tokens, cost_usd_estimate }` to a Redis list, with a daily aggregator emitting summary logs.
 - **`src/ai/tools/web-search.js`** — Tavily by default (Serper as alt). Returns top 5 results with snippets. Used in the sanctuary-judgment tool loop.
 - **`src/ai/tools/google-reviews.js`** — proxies the Google Places `place_details` field-mask=`reviews,rating,user_ratings_total`. Mirrors `ang-kl/gia/consultant.js`.
@@ -292,7 +291,7 @@ ang-kl/Gia-WA/
 ### 6.3 Data flow — happy path (user asks for lunch)
 
 ```
-WA user                  Meta Cloud API           Gia-WA server                   Llama provider           Vault/data
+WA user                  Meta Cloud API           Gia-WA server                   Gemini API               Vault/data
   |                            |                       |                              |                       |
   | "I want sushi nearby"      |                       |                              |                       |
   |--------------------------->|                       |                              |                       |
@@ -301,7 +300,7 @@ WA user                  Meta Cloud API           Gia-WA server                 
   |                            |                       | verify signature             |                       |
   |                            |                       | dedup.check (miss)           |                       |
   |                            |                       | router.pick('classify')      |                       |
-  |                            |                       |--- llama.chat (3.1-8B JSON)->|                       |
+  |                            |                       |--- gemini call (Flash) ----->|                       |
   |                            |                       |<-- {intent: venue, ...} -----|                       |
   |                            |                       | request location             |                       |
   |                            | POST /messages        |                              |                       |
@@ -313,7 +312,7 @@ WA user                  Meta Cloud API           Gia-WA server                 
   |                            |---------------------->|                              |                       |
   |                            |                       | onLocation                   |                       |
   |                            |                       | router.pick('stage-a')       |                       |
-  |                            |                       |--- llama.chat (3.3-70B JSON)>|                       |
+  |                            |                       |--- gemini call (Pro) ------->|                       |
   |                            |                       |<-- {executor_prompt} --------|                       |
   |                            |                       | tools/vault-lookup ----------+--------- read ------->|
   |                            |                       |<----- nearby picks ----------+-----------------------|
@@ -354,72 +353,124 @@ For the Cuisine Flow path, replace the "request location → onLocation" segment
 }
 ```
 
-**Explicit non-dependencies** (do not add): `@anthropic-ai/sdk`, `node-telegram-bot-api`, anything `@google/generative-ai`, anything that pulls in Vite or a frontend build chain (Gia-WA has no frontend bundle — Flows are server-side JSON).
+**Explicit non-dependencies** (do not add): `@anthropic-ai/sdk`, `node-telegram-bot-api`, anything that pulls in Vite or a frontend build chain (Gia-WA has no frontend bundle — Flows are server-side JSON). Gemini is called over the existing `axios` dep via the Google AI Studio REST API, so `@google/generative-ai` is not needed either — but it is no longer *barred* (ADR-004).
 
 ---
 
-## 7. AI layer — Meta Llama only (the maximization story)
+## 7. AI layer — Google Gemini
 
-Track B from the depth analysis: extract the most we can from open-weight Llama, given D-1.
+> **[REVISED 2026-05-22 — ADR-004.]** This section originally specified a
+> Meta-Llama-only layer (Groq primary / Together AI fallback) per directive
+> D-1. The operator's 2026-05-22 "Gemini-first" decision makes Google Gemini
+> the engine for the **entire** AI layer; Llama, Groq and Together AI are
+> dropped. ADR-004 is the authoritative record; ADR-002 (Gemini-for-R.E.D-only)
+> is superseded. The section below is the Gemini-first design.
+
+The whole AI layer — `classify`, `converse`, `stage-a`, `sanctuary`,
+`hidden-gems` — runs on Google Gemini, accessed via a plain Google AI Studio
+API key (`GEMINI_API_KEY`). One vendor, one key. No Anthropic, no Llama.
 
 ### 7.1 Provider strategy
 
-- **Primary: Groq** — sub-200 ms TTFT, cheapest per token in the market, generous free tier, OpenAI-compatible API. Models available: Llama 3.1 8B Instant, 3.3 70B Versatile, 3.2 11B Vision (limited).
-- **Fallback: Together AI** — OpenAI-compatible, better sustained-load rate limits than Groq, broader Llama 3.2 Vision support, has Llama 4 (Scout/Maverick) as they GA. Slower TTFT (~500 ms) but acceptable for fallback.
-- **Auto-fallback trigger**: Groq returns 429 or 5xx, or exceeds a 3 s timeout. `src/ai/llama.js` retries on Together; emits a structured telemetry event so we can see fallback rates.
-- **Out of scope (for now)**: AWS Bedrock, Cerebras, Fireworks, self-hosted Llama. Operator may revise.
+- **Single vendor: Google Gemini**, via the Google AI Studio REST API
+  (`generativelanguage.googleapis.com`). Plain API-key auth — **not** Vertex
+  AI, **not** a GCP service account. Mirrors how Soleat's `gemini-client.js`
+  is wired ("plain vanilla").
+- **No new npm dependency.** Gemini is called over the existing `axios` dep
+  via REST; `@google/generative-ai` is not required (§6.4).
+- **Resilience without a second vendor.** With Groq/Together gone there is no
+  cross-vendor failover. Resilience instead comes from a **within-Gemini model
+  chain**: on 429 / 5xx / timeout, `src/ai/gemini.js` retries the request on
+  the next model in a fallback chain (e.g. `2.5-flash` → `2.5-flash-lite`),
+  with jittered backoff, and emits a telemetry event so fallback rates are
+  visible. This mirrors the `MODEL_CHAIN` pattern in Soleat's `gemini-client.js`.
+- **Out of scope (for now)**: Vertex AI, and a second LLM vendor as
+  cross-vendor failover. The operator accepted dropping cross-vendor failover
+  for a one-vendor surface (ADR-004); reintroducing one is a new ADR.
 
 ### 7.2 Model router
 
-`src/ai/router.js#pick(task)` returns the provider/model/params tuple. Initial mapping:
+`src/ai/router.js#pick(task)` returns the model/params tuple. Initial mapping
+(confirm the exact model IDs against the Google AI Studio catalogue at Phase 2
+build time):
 
-| Task | Model | Provider | Notes |
-|---|---|---|---|
-| `classify` (intent detection on every inbound) | Llama 3.1 8B Instant | Groq | Sub-200 ms TTFT; cents-per-million tokens; 8B is plenty for our classifier. |
-| `converse` (short ack/reply outside venue intent) | Llama 3.3 70B Versatile | Groq | Quality matters; latency budget allows. |
-| `stage-a` (executor-prompt synthesis) | Llama 3.3 70B Versatile (Llama 4 Maverick if GA) | Groq primary, Together fallback | Strongest reliable Llama for multi-constraint reasoning. |
-| `sanctuary` (Google-reviews-driven tool-use loop) | Llama 3.3 70B Versatile | Groq | Function-calling support landed in 3.1; 3.3 is stable. |
-| `vision` (menu OCR if added later) | Llama 3.2 11B Vision | Together | Groq vision support is limited. |
-| `hidden-gems` (R.E.D path — vault-miss fallback) | Gemini (latest stable — Flash for cost, Pro for the heavier R.E.D template) | Google AI Studio | The sole non-Llama task. Plain `GEMINI_API_KEY`. Authorised by ADR-002 (D-1 revision); built in Phase 5. |
+| Task | Model | Notes |
+|---|---|---|
+| `classify` (intent detection on every inbound) | Gemini 2.5 Flash | Fast + cheap; runs on every message. Structured-output JSON. |
+| `converse` (short ack/reply outside venue intent) | Gemini 2.5 Flash | Latency-sensitive; Flash is sufficient. |
+| `stage-a` (executor-prompt synthesis) | Gemini 2.5 Pro | Multi-constraint reasoning; quality matters. |
+| `sanctuary` (Google-reviews-driven tool-use loop) | Gemini 2.5 Flash | Tool-use loop; Flash handles function calling. |
+| `hidden-gems` (R.E.D path — vault-miss fallback) | Gemini 2.5 Pro | The ~150 KB R.E.D template; Pro for the heavier reasoning. Built in Phase 5. |
 
-The router is a pure function — trivially unit-testable. Tests assert that `pick('classify').model === 'llama-3.1-8b-instant'` etc. (one `router.test.js` file).
+The router is a pure function — trivially unit-testable. The model IDs here are
+the single source of truth; tests assert `pick('classify').model` etc. (one
+`router.test.js` file).
 
-### 7.3 Prompt structure (token-trimmed for Llama)
+### 7.3 Prompt structure
 
-Llama follows JSON-schema prompts well; few-shot is less load-bearing than for older models. Compared to Soleat's Claude prompts:
+Gemini follows JSON-schema prompts well; few-shot is less load-bearing than for
+older models. Compared to Soleat's Claude prompts:
 
-- **Classifier system prompt**: keep the cuisine catalogue (Llama needs the enum to do strict classification), but drop 60–80 % of the few-shot examples and verbose explanations. Target: ≤ 8 k input tokens per call (Soleat's Claude classifier sends ~25 k including catalogue).
-- **Stage-A meta-prompt**: shorter, more deterministic schema, fewer free-form filters. Llama 3.3 70B is materially worse than Opus 4.7 at "creative" constraint blending — lean into strict schema instead.
-- **Sanctuary prompt**: tool-use loop with at most 3 iterations to bound latency.
+- **Classifier system prompt**: keep the cuisine catalogue (Gemini needs the
+  enum to do strict classification), but drop 60–80 % of the few-shot examples
+  and verbose explanations. Trimming still cuts cost and latency even though
+  Gemini's context window is large.
+- **Stage-A meta-prompt**: strict JSON schema via Gemini structured output
+  (`responseSchema`), deterministic, fewer free-form filters.
+- **Sanctuary prompt**: tool-use loop with at most 3 iterations to bound
+  latency.
 
-All static prompts live in `src/ai/prompts/` as ES modules exporting strings, so they're greppable, lintable, and unit-testable for token count regressions.
+All static prompts live in `src/ai/prompts/` as ES modules exporting strings,
+so they're greppable, lintable, and unit-testable for token-count regressions.
 
 ### 7.4 Tool use (function calling)
 
-Llama 3.1+ supports OpenAI-compatible function calling. Use it for:
+Gemini supports function calling (`tools` / `functionDeclarations`). Use it for:
 
-- **`web-search`** — replaces `web_search_20260209` (the server-side tool that Soleat uses in `ang-kl/gia/index.js:3901`). Tavily by default; Serper as alt. The agent loop in `llama.js` handles `tool_call` → tool execution → result-back → continuation, capped at 3 iterations.
+- **`web-search`** — replaces `web_search_20260209` (the server-side tool that
+  Soleat uses in `ang-kl/gia/index.js:3901`). Tavily by default; Serper as alt.
+  The agent loop in `gemini.js` handles `functionCall` → tool execution →
+  result-back → continuation, capped at 3 iterations.
 - **`google-reviews`** — sanctuary judgment, called from the `sanctuary` task.
-- **`vault-lookup`** — `nearby_picks(lat, lng, radius_m)` and `lookup_vault(cuisine)` so the model can pull from our data on demand (avoids dumping the whole vault into context).
+- **`vault-lookup`** — `nearby_picks(lat, lng, radius_m)` and
+  `lookup_vault(cuisine)` so the model can pull from our data on demand
+  (avoids dumping the whole vault into context).
 
-**Tool-arg hallucination guard**: validate `tool_calls.arguments` against a JSON schema before dispatching. If invalid, reject with a corrective system message ("argument `lat` is required and must be a number") and loop. This is non-optional; Llama hallucinates tool args more than Claude.
+**Tool-arg validation guard**: validate `functionCall.args` against a JSON
+schema before dispatching. If invalid, reject with a corrective message
+("argument `lat` is required and must be a number") and loop. This is
+non-optional — always validate model-supplied tool args at the boundary.
 
-### 7.5 JSON-mode / strict schema
+### 7.5 Structured output / JSON-mode
 
-Both Groq and Together support `response_format: { type: 'json_object' }`; Groq additionally supports strict `json_schema`. Use strict schema everywhere `nl-intent.js` / Stage-A / sanctuary in Soleat would have manually parsed LLM JSON — eliminates the schema-parse failures that `gemini-retry.js` exists to swallow.
+Gemini supports `responseMimeType: "application/json"` plus `responseSchema`
+for strict structured output. Use it everywhere `nl-intent.js` / Stage-A /
+sanctuary in Soleat would have manually parsed LLM JSON — eliminates the
+schema-parse failures that Soleat's `gemini-retry.js` exists to swallow.
 
-### 7.6 What we lose vs. Anthropic (honest accounting, for the record)
+### 7.6 Cost posture
 
-- **No prompt caching.** Static prompts are re-billed every call. Mitigations: prompt trimming (§7.3), Redis dedup (§7.7), telemetry-driven monitoring.
-- **No extended-thinking equivalent.** Stage-A meta-prompts must be shorter and more deterministic. Expect measurably lower quality on multi-constraint searches.
-- **No server-side `web_search_20260209`.** Implemented client-side via Tavily; adds an external dependency, +200 ms latency per tool call, more failure modes (Tavily 5xx / rate limits).
-- **No tool-use determinism guarantees.** Mitigated by the validation guard in §7.4.
+- **Per-call telemetry** (`src/ai/telemetry.js`): Gemini bills per token;
+  input/output token counts + a cost estimate are written per call, with a
+  daily aggregate logged. Visibility is the primary cost lever.
+- **Gemini context caching** is available — a large static prefix (e.g. the
+  cuisine catalogue) can be cached and billed at a reduced rate on cache hits.
+  This partly restores the prompt-caching capability the Llama-only draft of
+  this section had written off as an unrecoverable loss. Treat it as a
+  Phase 2+ optimisation, not a Phase 2 must-have.
+- **Redis dedup** (`src/ai/dedup.js`): 60 s TTL on `(lang, sha256(text))` →
+  response. Catches duplicate-request bursts (refresh-spam, double-tap).
 
-### 7.7 Mitigations
+### 7.7 What changed vs. the Llama-only plan
 
-- **Redis dedup** (`src/ai/dedup.js`): 60 s TTL on `(lang, sha256(text))` → response. Catches duplicate-request bursts (refresh-spam, double-tap) which is the only "cache" we have access to.
-- **Per-call telemetry** (`src/ai/telemetry.js`): input/output token counts written per call. Daily aggregate logged. Without caching, **visibility is the only cost lever**.
-- **Streaming-aware delivery**: `src/transport/whatsapp.js#sendText` chunks at sentence boundaries; `llama.js#stream` exposes a token stream that pumps into a coalescing buffer flushed at WhatsApp's effective length. Reduces perceived latency.
+- `src/ai/llama.js` is **not built**; `src/ai/gemini.js` is the single client.
+- No Groq / Together env vars, no cross-vendor failover code. The
+  `ai-fallback.test.js` slot tests the within-Gemini model chain, not a
+  Groq→Together path.
+- The Llama-only draft's "what we lose vs. Anthropic" accounting (no prompt
+  caching, no extended thinking) is largely retired: Gemini offers context
+  caching (§7.6) and its own reasoning budget. The one genuine residual is the
+  loss of cross-vendor failover (§7.1).
 
 ---
 
@@ -475,11 +526,9 @@ WA_APP_SECRET=              # for x-hub-signature-256 verification
 FLOWS_PRIVATE_KEY_PEM=      # RSA-2048 private key, base64-encoded PEM
 FLOWS_PUBLIC_KEY_PEM=       # corresponding public key, must be uploaded to Meta
 
-# AI providers
-GROQ_API_KEY=
-TOGETHER_API_KEY=
-TAVILY_API_KEY=             # for web-search tool
-GEMINI_API_KEY=             # Google AI Studio — R.E.D / Hidden-Gems path only (ADR-002)
+# AI provider — Google Gemini (the whole AI layer, ADR-004)
+GEMINI_API_KEY=             # plain Google AI Studio key — not Vertex, not a GCP service-account
+TAVILY_API_KEY=             # for the web-search tool (§7.4)
 
 # Optional Google integration (sanctuary tool)
 GOOGLE_PLACES_API_KEY=
@@ -522,7 +571,7 @@ Meta publishes test vectors for the Flow encryption scheme. `__tests__/crypto.te
 
 - Provision a Meta-supplied test phone number (free, 5 recipients).
 - Manual end-to-end smoke per phase before merge:
-  - Phase 3: send "hello" → bot replies via Llama 3.3-70B.
+  - Phase 3: send "hello" → bot replies via Gemini 2.5 Flash.
   - Phase 4: send "sushi nearby" → location request → share location → Cuisine Flow opens → submit → receive top-5 message.
   - Phase 5: a cuisine search with no vault match returns a Gemini-driven R.E.D hidden-gems suggestion, not an empty result.
   - Phase 6: same loop for Hawker.
@@ -589,14 +638,14 @@ Each phase is independent enough that the operator can pause or redirect between
 - CI jobs `syntax` + `test` populated; both green.
 - Branch: `claude/phase-1-skeleton`.
 
-### Phase 2 — Llama wrapper + router (1 PR)
-- `src/ai/llama.js` (Groq primary + Together fallback, JSON-mode, function-calling, streaming).
+### Phase 2 — Gemini wrapper + router (1 PR)
+- `src/ai/gemini.js` (Google AI Studio REST client over `axios`; structured output, function-calling, within-Gemini model-chain fallback on 429/5xx — §7.1).
 - `src/ai/router.js` (pure function, fully tested).
 - `src/ai/dedup.js` (Redis-backed; integration test against a local Redis).
 - `src/ai/telemetry.js`.
 - `src/ai/prompts/classifier.js` (token-trimmed cuisine-classifier system + cuisine catalogue).
-- Tests: router selection, JSON-mode parse, fallback on 429, dedup hit/miss.
-- Branch: `claude/phase-2-llama-router`.
+- Tests: router selection, structured-output parse, model-chain fallback on 429, dedup hit/miss.
+- Branch: `claude/phase-2-gemini-router`.
 
 ### Phase 3 — Inbound text path (1 PR)
 - `src/handlers/onMessage.js` — text intent classifier round-trip; routes to `converse` for non-venue intents.
@@ -609,20 +658,17 @@ Each phase is independent enough that the operator can pause or redirect between
 - `src/flows/cuisine.json` (the Flow definition).
 - `src/flows/handler.js` routing INIT / data_exchange / BACK / ping.
 - `src/handlers/onLocation.js` + `src/handlers/onFlowReply.js`.
-- `src/ai/tools/vault-lookup.js` + `src/ai/prompts/stage-a.js` (Llama 3.3-70B).
+- `src/ai/tools/vault-lookup.js` + `src/ai/prompts/stage-a.js` (Gemini 2.5 Pro).
 - `src/data/vault.js` + `src/data/cuisines.js` via the §8.1 bridge.
 - `scripts/publish-flow.mjs` working end-to-end on a DRAFT Flow.
 - Branch: `claude/phase-4-cuisine`.
 
-### Phase 5 — Hidden-Gems / R.E.D path (Gemini) (1 PR)
-- `src/ai/gemini.js` — Google AI Studio (Gemini) client, sibling to `llama.js`; plain `GEMINI_API_KEY`, JSON-mode, retry/backoff on 429/5xx.
+### Phase 5 — Hidden-Gems / R.E.D path (1 PR)
 - `src/ai/prompts/red.js` — the R.E.D ("Random Excellent Discovery") Hidden-Gems prompt; token-trimmed port of Soleat's `HIDDEN_GEMS_PROMPT_TEMPLATE` (cf. `ang-kl/gia/gemini-client.js`).
-- `src/ai/router.js` — add a `hidden-gems` task → `{ provider: 'google', model: <gemini>, response_format }`.
+- `src/ai/router.js` — add a `hidden-gems` task → Gemini 2.5 Pro (§7.2).
 - `src/handlers/onFlowReply.js` — wire R.E.D as the vault-miss fallback: a thin/empty cuisine result triggers a Gemini-driven hidden-gems suggestion instead of an empty reply.
-- `src/ai/telemetry.js` — extend to track Gemini input/output tokens + cost alongside Llama.
-- `.env.example` — add `GEMINI_API_KEY` (the §9.1 list already carries it).
-- Tests: router returns Gemini for `hidden-gems`; R.E.D fallback fires on a vault miss; Gemini-client JSON parse + retry.
-- **Authorised by ADR-002** (D-1 revision, 2026-05-22). Depends on Phase 4 (search path) + Phase 2 (AI infra); not gated on Hawker.
+- Tests: router returns the R.E.D model for `hidden-gems`; R.E.D fallback fires on a vault miss; R.E.D prompt parse.
+- **Authorised by ADR-002, then ADR-004 (Gemini-first).** `src/ai/gemini.js` already exists from Phase 2 — under Gemini-first R.E.D is no longer a new-vendor phase, just the R.E.D prompt + the vault-miss wiring. Depends on Phase 4 (search path) + Phase 2 (AI infra); not gated on Hawker.
 - Branch: `claude/phase-5-hidden-gems`.
 
 ### Phase 6 — Hawker Flow (conditional, 1 PR)
@@ -637,7 +683,7 @@ Each phase is independent enough that the operator can pause or redirect between
 - Branch: `claude/phase-7-soak`.
 
 ### Phase 8 — Out-of-scope decisions documented (1 PR, docs-only)
-- `doc/decisions/` ADRs for the not-ported surfaces — transport-not-ported, oversight-not-ported, no-prompt-cache, and a "Llama-only for the main AI layer" ADR that **must reflect ADR-002** (Gemini permitted for the R.E.D path). Each ADR explains the constraint, the consequence, and the open-door condition for revisiting. (ADR file numbers follow the live `doc/decisions/` sequence — 001 and 002 are already taken.)
+- `doc/decisions/` ADRs for the not-ported surfaces — transport-not-ported, oversight-not-ported — and a consolidated AI-posture ADR that **must reflect ADR-004** (Gemini-first; the whole AI layer is Gemini, Llama/Groq/Together dropped, ADR-002 superseded). Each ADR explains the constraint, the consequence, and the open-door condition for revisiting. (ADR file numbers follow the live `doc/decisions/` sequence — 001–004 are already taken.)
 - Branch: `claude/phase-8-decisions`.
 
 **Hard stop after Phase 4**: operator approves before Phase 6 (Hawker) — its static-map rendering is non-trivial spend; don't build it speculatively. Phase 5 (Hidden-Gems / R.E.D) is already operator-authorised via ADR-002 and may proceed once Phase 4 lands.
@@ -650,7 +696,7 @@ Each phase is independent enough that the operator can pause or redirect between
 |---|---|
 | 0 | `ang-kl/Gia-WA` exists with `README.md`, `package.json@0.1.0`, CI skeleton. PR merged. |
 | 1 | `GET /webhook` echoes verify_token in production; `sendText` works; format escape unit-tested. |
-| 2 | Llama classifier responds to a curl test in < 300 ms; fallback to Together verified by simulated 429. |
+| 2 | Gemini classifier responds to a curl test; within-Gemini model-chain fallback verified by a simulated 429. |
 | 3 | A user can text the test number and get a conversational reply; intent classifier picks `venue` correctly ≥ 90 % on a 50-message smoke set. |
 | 4 | End-to-end: user texts "sushi" → location request → location share → Cuisine Flow opens → submit → top-5 sushi venues message arrives, formatted, with no markup corruption. |
 | 5 | A cuisine search with no vault match returns a Gemini-driven R.E.D hidden-gems suggestion instead of an empty result; the Gemini call is visible in telemetry. |
@@ -663,7 +709,7 @@ Each phase is independent enough that the operator can pause or redirect between
 ## 14. Open questions to confirm with operator before Phase 4
 
 - **Vault bridge** — **resolved 2026-05-22 (ADR-003)**: Option B (submodule) wired at `vendor/soleat/`, pinned to gia `v0.61.99`. §8.1.
-- **Llama 4 availability**: by Phase 2 timing, is Llama 4 Maverick GA on Groq? If yes, swap Stage-A to it; revise §7.2.
+- **Gemini model IDs**: §7.2 pins Gemini 2.5 Flash / 2.5 Pro. Confirm the exact current model identifiers against the Google AI Studio catalogue at Phase 2 build time; revise §7.2 if they have moved.
 - **Tavily vs Serper vs Google Custom Search** for the web-search tool. §7.4. Default Tavily unless operator prefers otherwise.
 - **Hawker phase gate** (§12 Phase 6): what usage metric green-lights the build?
 - **Cross-transport identity linking**: confirm out-of-scope. §4.6.
@@ -671,7 +717,7 @@ Each phase is independent enough that the operator can pause or redirect between
 
 ---
 
-## 15. Reference links (Meta + Llama)
+## 15. Reference links (Meta + Gemini)
 
 - **WhatsApp Cloud API** — https://developers.facebook.com/docs/whatsapp/cloud-api
 - **Flows reference** — https://developers.facebook.com/docs/whatsapp/flows
@@ -679,10 +725,8 @@ Each phase is independent enough that the operator can pause or redirect between
 - **Flow component spec** — https://developers.facebook.com/docs/whatsapp/flows/reference/components
 - **Message templates** — https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates
 - **Webhook signature verification** — https://developers.facebook.com/docs/messenger-platform/webhooks#validate-payloads
-- **Groq API docs** — https://console.groq.com/docs
-- **Together AI docs** — https://docs.together.ai
+- **Gemini API (Google AI Studio)** — https://ai.google.dev/gemini-api/docs
 - **Tavily API** — https://docs.tavily.com
-- **Llama 3.1 / 3.3 model cards** — https://llama.meta.com/
 
 ---
 
@@ -733,7 +777,7 @@ If any check fails, **stop and tell the operator which layer is blocked** (proxy
 
 All files below are CREATED under `ang-kl/Gia-WA/`. Nothing under `ang-kl/gia/` is modified by Gia-WA work.
 
-`package.json`, `package-lock.json`, `README.md`, `.env.example`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish-flows.yml`, `server.js`, `src/transport/whatsapp.js`, `src/transport/format.js`, `src/flows/cuisine.json`, `src/flows/hawker.json`, `src/flows/handler.js`, `src/flows/crypto.js`, `src/flows/sign.js`, `src/handlers/onMessage.js`, `src/handlers/onFlowReply.js`, `src/handlers/onLocation.js`, `src/ai/llama.js`, `src/ai/router.js`, `src/ai/dedup.js`, `src/ai/telemetry.js`, `src/ai/tools/web-search.js`, `src/ai/tools/google-reviews.js`, `src/ai/tools/vault-lookup.js`, `src/ai/prompts/classifier.js`, `src/ai/prompts/stage-a.js`, `src/ai/prompts/sanctuary.js`, `src/data/vault.js`, `src/data/cuisines.js`, `src/user/identity.js`, `src/user/prefs.js`, `__tests__/*` (one per module), `scripts/publish-flow.mjs`, `scripts/rotate-flow-keys.mjs`, `doc/Journal/*`, `doc/decisions/*`, `doc/.serial-state.yml`.
+`package.json`, `package-lock.json`, `README.md`, `.env.example`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish-flows.yml`, `server.js`, `src/transport/whatsapp.js`, `src/transport/format.js`, `src/flows/cuisine.json`, `src/flows/hawker.json`, `src/flows/handler.js`, `src/flows/crypto.js`, `src/flows/sign.js`, `src/handlers/onMessage.js`, `src/handlers/onFlowReply.js`, `src/handlers/onLocation.js`, `src/ai/gemini.js`, `src/ai/router.js`, `src/ai/dedup.js`, `src/ai/telemetry.js`, `src/ai/tools/web-search.js`, `src/ai/tools/google-reviews.js`, `src/ai/tools/vault-lookup.js`, `src/ai/prompts/classifier.js`, `src/ai/prompts/stage-a.js`, `src/ai/prompts/sanctuary.js`, `src/data/vault.js`, `src/data/cuisines.js`, `src/user/identity.js`, `src/user/prefs.js`, `__tests__/*` (one per module), `scripts/publish-flow.mjs`, `scripts/rotate-flow-keys.mjs`, `doc/Journal/*`, `doc/decisions/*`, `doc/.serial-state.yml`.
 
 ---
 
