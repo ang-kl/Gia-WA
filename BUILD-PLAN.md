@@ -429,6 +429,8 @@ Gia-WA needs the cuisine catalogue and the versioned vault from Soleat. Options,
 
 **Decision (default for receiving session)**: **Option B (submodule)** for Phase 0 — it's the lowest-coupling, least-coordination path. Revisit to Option A after operator gives the green light to publish the soleat-vault package.
 
+**Status — wired 2026-05-22 (ADR-003).** Option B is confirmed and live: `ang-kl/gia` is a git submodule at `vendor/soleat/`, pinned at `v0.61.99` (commit `ddf5f37`), reachable via the canonical `https://github.com/ang-kl/gia.git` (gia was made public). The full checkout is ~920 MB (`vault/` = 766 MB across 16 versions); Phase 4 consumers and CI should sparse-checkout `data/` + the newest `vault/<version>/` only (`1st_Setup.MD §6`). `vendor/` is excluded from `npm run syntax` and from vitest so Soleat's own code/tests stay out of Gia-WA's preflight.
+
 ### 8.2 Redis keyspace
 
 - **All Gia-WA keys** prefixed `wa:`.
@@ -652,7 +654,7 @@ Each phase is independent enough that the operator can pause or redirect between
 
 ## 14. Open questions to confirm with operator before Phase 4
 
-- **Vault bridge**: confirm Option B (submodule) vs revisit to Option A (published package). §8.1.
+- **Vault bridge** — **resolved 2026-05-22 (ADR-003)**: Option B (submodule) wired at `vendor/soleat/`, pinned to gia `v0.61.99`. §8.1.
 - **Llama 4 availability**: by Phase 2 timing, is Llama 4 Maverick GA on Groq? If yes, swap Stage-A to it; revise §7.2.
 - **Tavily vs Serper vs Google Custom Search** for the web-search tool. §7.4. Default Tavily unless operator prefers otherwise.
 - **Hawker phase gate** (§12 Phase 6): what usage metric green-lights the build?
