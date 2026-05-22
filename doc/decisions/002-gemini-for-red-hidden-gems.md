@@ -1,8 +1,13 @@
 # ADR-002 — Gemini permitted as a sibling vendor for the Hidden-Gems / R.E.D path
 
-- **Status:** Accepted
+- **Status:** Accepted — **superseded by ADR-004 (2026-05-22)**
 - **Date:** 2026-05-22
 - **Serial:** (№ 3 - 22-05 '26 06:25 SGT)
+
+> **Superseded.** ADR-004 ("Gemini-first") makes Google Gemini the engine for
+> the **entire** AI layer, not just the R.E.D path. The scoping in this ADR —
+> "Gemini solely for Hidden-Gems / R.E.D, main layer stays Llama-only" — no
+> longer holds. This ADR is retained for decision-history legibility.
 
 ## Context
 
