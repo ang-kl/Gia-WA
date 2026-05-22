@@ -78,8 +78,11 @@ not as where new Gia-WA code lives, unless the operator says otherwise.
 
 ## Non-negotiable constraints (BUILD-PLAN §2)
 
-- **D-1 — Llama only.** No `@anthropic-ai/sdk`, no Claude API calls, no Gemini.
-  AI is Meta Llama via Groq (primary) / Together AI (fallback).
+- **D-1 — Llama only (main AI layer).** No `@anthropic-ai/sdk`, no Claude API
+  calls. The main layer (`classify` / `converse` / `stage-a` / `sanctuary`) is
+  Meta Llama via Groq (primary) / Together AI (fallback). **Revised 2026-05-22
+  (ADR-002):** Gemini is permitted **solely** for the Hidden-Gems / R.E.D path
+  via a plain Google AI Studio key (`GEMINI_API_KEY`).
 - **D-2 — Zero edits to `ang-kl/gia`.** Read its data only via the §8.1 bridge.
 - **D-4 — Per-PR Journal.** After opening any PR and after a PR merges, append
   an `[HDR]` block to `doc/Journal/journal-<v>-<dd_mm_yy-hhmm>.md`.

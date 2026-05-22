@@ -34,7 +34,7 @@ These have been issued in chat across multiple sessions. The receiving session m
 
 | # | Directive | Authority / origin | Implication |
 |---|---|---|---|
-| D-1 | **AI posture is "Meta Llama only" — no Anthropic SDK in Gia-WA.** | Operator, rev. 3 of the WhatsApp-port discussion. | No `@anthropic-ai/sdk` dependency. No Claude API calls. Llama via Groq (primary) / Together AI (fallback). |
+| D-1 | **AI posture is "Meta Llama only" — no Anthropic SDK in Gia-WA.** **`[REVISED 2026-05-22 — see ADR-002]`** Gemini is now permitted **solely** for the Hidden-Gems / R.E.D path via a plain Google AI Studio key; the main AI layer (`classify` / `converse` / `stage-a` / `sanctuary`) stays Llama-only. | Operator, rev. 3 of the WhatsApp-port discussion; revised by operator 2026-05-22. | No `@anthropic-ai/sdk` dependency. No Claude API calls. Main AI layer = Llama via Groq (primary) / Together AI (fallback). Gemini allowed for the R.E.D path only — `GEMINI_API_KEY`, plain Google AI Studio (see ADR-002). |
 | D-2 | **Zero edits to `ang-kl/gia` source code from Gia-WA work.** | Operator: *"Don't touch my codes here."* | The bridge from §8.1 is read-only. Any change to `ang-kl/gia` needed to enable Gia-WA must be raised as a separate PR on that repo by a different session. |
 | D-3 | **`Gia-WA` is its own repository, not a subdirectory.** | Operator pivot, 2026-05-15 (current session). | All files under `ang-kl/Gia-WA`. The `Gia-WA/README.md` in `ang-kl/gia` is a pointer only (post-#426). |
 | D-4 | **Standing rule: after opening any PR, and after a PR merges, record it in the Journal.** | Operator: recorded as G3 in `journal-0_60_144-13_05_26-0900.md` of `ang-kl/gia`. | Applies to Gia-WA too, on its own Journal under `Gia-WA/doc/Journal/`. |
