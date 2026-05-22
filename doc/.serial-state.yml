@@ -1,10 +1,10 @@
 counters:
-  commit: 2
+  commit: 3
   build: 0
   documents:
-    journal: 2
+    journal: 3
     register: 0
-    decisions: 1
+    decisions: 2
 sessions:
   current_chat_id: 2026-05-22-doc-conformance
   current_chat_counter: 1
