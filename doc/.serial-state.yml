@@ -1,8 +1,8 @@
 counters:
-  commit: 4
+  commit: 5
   build: 0
   documents:
-    journal: 4
+    journal: 5
     register: 0
     decisions: 2
 sessions:
