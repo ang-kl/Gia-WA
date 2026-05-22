@@ -80,18 +80,26 @@ Single integration point: `ang-kl/gia/llm-client.js` using `@anthropic-ai/sdk@^0
 
 ### 3.3 Data layer (the part Gia-WA needs)
 
-- `ang-kl/gia/data/cuisines.js` — canonical cuisine catalogue.
-- `ang-kl/gia/vault/<version>/` — per-version snapshots of venue data (vault-versioned with the package version).
-- `ang-kl/gia/data/` — other static data (hawker centres, MRT, etc.).
+> **[Corrected 2026-05-22 — audit `doc/gia-audit-2026-05-22.md`.]** Earlier
+> drafts of this section assumed a `data/cuisines.js`; no such file exists in
+> `ang-kl/gia`. The paths below reflect the audited reality at gia `v0.61.99`.
 
-Gia-WA imports these read-only via the bridge in §8.1.
+- **Cuisine catalogue** — `ang-kl/gia/cuisines-vault.js` (repo root, ~15 KB). It
+  parses its source of truth, `ang-kl/gia/doc/Feature/cuisines_js.MD`, into
+  `{ categoryId, categoryLabel, name, slug, searchQuery, keywords[] }`.
+- `ang-kl/gia/vault/<version>/` — per-version snapshots, vault-versioned with the
+  package version. Each snapshot is a **full repo snapshot** (engine `.js`,
+  `data/`, `doc/`, …), not just venue data — 16 versions ≈ 766 MB.
+- `ang-kl/gia/data/` — other static data (hawker centres, MRT, geo-overlays, etc.).
+
+Gia-WA imports these read-only via the bridge in §8.1 (wired — ADR-003).
 
 ### 3.4 What does NOT need porting
 
 - The 5 Mini Apps (UI is Telegram-WebApp-specific; WhatsApp Flows replace only Cuisine and possibly Hawker — see §5).
 - The Telegram-bot framework, inline keyboards, callback queries — all replaced by WhatsApp message primitives.
 - `twa-auth.js`, webhook-secret check, `web_app_data` handler — replaced by WhatsApp's own signature scheme and Flow Data Channel.
-- The Gemini Hidden-Gems R.E.D template path — under D-1, Gia-WA uses Llama everywhere; if the operator later wants Gemini parity in Gia-WA, raise it.
+- ~~The Gemini Hidden-Gems R.E.D template path.~~ **[REVISED — ADR-002, 2026-05-22]** Now **in scope**: the operator raised it, and Gemini is authorised solely for the R.E.D path, scheduled as **Phase 5** (§12). The main AI layer still stays Llama-only.
 
 ---
 
@@ -421,15 +429,15 @@ Both Groq and Together support `response_format: { type: 'json_object' }`; Groq 
 
 Gia-WA needs the cuisine catalogue and the versioned vault from Soleat. Options, in preference order:
 
-**Option A (preferred): published npm package or GitHub package** — Soleat publishes `@ang-kl/soleat-vault@<version>` containing `data/cuisines.js` + `vault/<latest>/`. Gia-WA depends on it via `package.json`. Pro: clean, versioned. Con: requires a one-time setup PR on `ang-kl/gia` (which D-2 forbids without operator sign-off).
+**Option A (preferred): published npm package or GitHub package** — Soleat publishes `@ang-kl/soleat-vault@<version>` containing the cuisine catalogue (`cuisines-vault.js` + its `doc/Feature/cuisines_js.MD` source) + `vault/<latest>/`. Gia-WA depends on it via `package.json`. Pro: clean, versioned. Con: requires a one-time setup PR on `ang-kl/gia` (which D-2 forbids without operator sign-off).
 
-**Option B: git submodule** of `ang-kl/gia` mounted under `Gia-WA/vendor/soleat/`. `src/data/vault.js` does `import { ... } from '../../vendor/soleat/data/cuisines.js'`. Pro: zero changes to Soleat; pinning is explicit. Con: submodule UX is rough; CI must `git submodule update --init`.
+**Option B: git submodule** of `ang-kl/gia` mounted under `Gia-WA/vendor/soleat/`. `src/data/cuisines.js` does `import { ... } from '../../vendor/soleat/cuisines-vault.js'`. Pro: zero changes to Soleat; pinning is explicit. Con: submodule UX is rough; CI must `git submodule update --init`.
 
-**Option C: HTTP fetch at build time** from `raw.githubusercontent.com/ang-kl/gia/<sha>/data/cuisines.js`. Pre-commit hook materialises a local cached copy under `Gia-WA/cache/soleat-data/`. Pro: no submodule, no npm publishing. Con: needs a vault-version pin file; ergonomics tricky.
+**Option C: HTTP fetch at build time** from `raw.githubusercontent.com/ang-kl/gia/<sha>/cuisines-vault.js`. Pre-commit hook materialises a local cached copy under `Gia-WA/cache/soleat-data/`. Pro: no submodule, no npm publishing. Con: needs a vault-version pin file; ergonomics tricky.
 
 **Decision (default for receiving session)**: **Option B (submodule)** for Phase 0 — it's the lowest-coupling, least-coordination path. Revisit to Option A after operator gives the green light to publish the soleat-vault package.
 
-**Status — wired 2026-05-22 (ADR-003).** Option B is confirmed and live: `ang-kl/gia` is a git submodule at `vendor/soleat/`, pinned at `v0.61.99` (commit `ddf5f37`), reachable via the canonical `https://github.com/ang-kl/gia.git` (gia was made public). The full checkout is ~920 MB (`vault/` = 766 MB across 16 versions); Phase 4 consumers and CI should sparse-checkout `data/` + the newest `vault/<version>/` only (`1st_Setup.MD §6`). `vendor/` is excluded from `npm run syntax` and from vitest so Soleat's own code/tests stay out of Gia-WA's preflight.
+**Status — wired 2026-05-22 (ADR-003).** Option B is confirmed and live: `ang-kl/gia` is a git submodule at `vendor/soleat/`, pinned at `v0.61.99` (commit `ddf5f37`), reachable via the canonical `https://github.com/ang-kl/gia.git` (gia was made public). The full checkout is ~920 MB (`vault/` = 766 MB across 16 versions); Phase 4 consumers and CI should sparse-checkout the cuisine catalogue (`cuisines-vault.js` + `doc/Feature/cuisines_js.MD`), `data/`, and the newest `vault/<version>/` only (`1st_Setup.MD §6`; see `doc/gia-audit-2026-05-22.md`). `vendor/` is excluded from `npm run syntax` and from vitest so Soleat's own code/tests stay out of Gia-WA's preflight.
 
 ### 8.2 Redis keyspace
 
