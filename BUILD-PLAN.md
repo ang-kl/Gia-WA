@@ -212,7 +212,7 @@ ang-kl/Gia-WA/
 │   │   └── format.js         # WhatsApp markup renderer + escaper (§4.5)
 │   ├── flows/
 │   │   ├── cuisine.json      # published Flow JSON
-│   │   ├── hawker.json       # (Phase 5 only)
+│   │   ├── hawker.json       # (Phase 6 only)
 │   │   ├── handler.js        # INIT / data_exchange / BACK / ping router
 │   │   ├── crypto.js         # RSA-OAEP decrypt + AES-GCM-128 + flipped-IV response
 │   │   └── sign.js           # x-hub-signature-256 verify
@@ -222,6 +222,7 @@ ang-kl/Gia-WA/
 │   │   └── onLocation.js     # location share → cuisine/hawker entry
 │   ├── ai/
 │   │   ├── llama.js          # Groq primary + Together fallback. JSON-mode, fn-calling, streaming.
+│   │   ├── gemini.js         # Google AI Studio client — R.E.D / Hidden-Gems path only (ADR-002)
 │   │   ├── router.js         # per-task model selection (3.1-8B / 3.3-70B / 3.2-11B-vision)
 │   │   ├── dedup.js          # Redis-backed (lang, text-hash) → response, 60s TTL
 │   │   ├── telemetry.js      # per-call input/output token logging
@@ -232,7 +233,8 @@ ang-kl/Gia-WA/
 │   │   └── prompts/
 │   │       ├── classifier.js     # token-trimmed intent classifier system + cuisine catalogue
 │   │       ├── stage-a.js        # token-trimmed Stage-A builder; strict JSON schema
-│   │       └── sanctuary.js      # tool-use loop, client-driven agent
+│   │       ├── sanctuary.js      # tool-use loop, client-driven agent
+│   │       └── red.js            # R.E.D Hidden-Gems prompt (Gemini, Phase 5)
 │   ├── data/
 │   │   ├── vault.js          # READ-ONLY loader; imports from §8.1 bridge
 │   │   └── cuisines.js       # READ-ONLY loader for cuisine catalogue
@@ -370,6 +372,7 @@ Track B from the depth analysis: extract the most we can from open-weight Llama,
 | `stage-a` (executor-prompt synthesis) | Llama 3.3 70B Versatile (Llama 4 Maverick if GA) | Groq primary, Together fallback | Strongest reliable Llama for multi-constraint reasoning. |
 | `sanctuary` (Google-reviews-driven tool-use loop) | Llama 3.3 70B Versatile | Groq | Function-calling support landed in 3.1; 3.3 is stable. |
 | `vision` (menu OCR if added later) | Llama 3.2 11B Vision | Together | Groq vision support is limited. |
+| `hidden-gems` (R.E.D path — vault-miss fallback) | Gemini (latest stable — Flash for cost, Pro for the heavier R.E.D template) | Google AI Studio | The sole non-Llama task. Plain `GEMINI_API_KEY`. Authorised by ADR-002 (D-1 revision); built in Phase 5. |
 
 The router is a pure function — trivially unit-testable. Tests assert that `pick('classify').model === 'llama-3.1-8b-instant'` etc. (one `router.test.js` file).
 
@@ -466,6 +469,7 @@ FLOWS_PUBLIC_KEY_PEM=       # corresponding public key, must be uploaded to Meta
 GROQ_API_KEY=
 TOGETHER_API_KEY=
 TAVILY_API_KEY=             # for web-search tool
+GEMINI_API_KEY=             # Google AI Studio — R.E.D / Hidden-Gems path only (ADR-002)
 
 # Optional Google integration (sanctuary tool)
 GOOGLE_PLACES_API_KEY=
@@ -510,7 +514,8 @@ Meta publishes test vectors for the Flow encryption scheme. `__tests__/crypto.te
 - Manual end-to-end smoke per phase before merge:
   - Phase 3: send "hello" → bot replies via Llama 3.3-70B.
   - Phase 4: send "sushi nearby" → location request → share location → Cuisine Flow opens → submit → receive top-5 message.
-  - Phase 5: same loop for Hawker.
+  - Phase 5: a cuisine search with no vault match returns a Gemini-driven R.E.D hidden-gems suggestion, not an empty result.
+  - Phase 6: same loop for Hawker.
 - Confirm `ping` health-check returns 200 from your server (Meta's Flow → Health → Test action).
 
 ### 10.4 Pre-commit / pre-PR checklist (gia-preflight, ported)
@@ -599,22 +604,33 @@ Each phase is independent enough that the operator can pause or redirect between
 - `scripts/publish-flow.mjs` working end-to-end on a DRAFT Flow.
 - Branch: `claude/phase-4-cuisine`.
 
-### Phase 5 — Hawker Flow (conditional, 1 PR)
+### Phase 5 — Hidden-Gems / R.E.D path (Gemini) (1 PR)
+- `src/ai/gemini.js` — Google AI Studio (Gemini) client, sibling to `llama.js`; plain `GEMINI_API_KEY`, JSON-mode, retry/backoff on 429/5xx.
+- `src/ai/prompts/red.js` — the R.E.D ("Random Excellent Discovery") Hidden-Gems prompt; token-trimmed port of Soleat's `HIDDEN_GEMS_PROMPT_TEMPLATE` (cf. `ang-kl/gia/gemini-client.js`).
+- `src/ai/router.js` — add a `hidden-gems` task → `{ provider: 'google', model: <gemini>, response_format }`.
+- `src/handlers/onFlowReply.js` — wire R.E.D as the vault-miss fallback: a thin/empty cuisine result triggers a Gemini-driven hidden-gems suggestion instead of an empty reply.
+- `src/ai/telemetry.js` — extend to track Gemini input/output tokens + cost alongside Llama.
+- `.env.example` — add `GEMINI_API_KEY` (the §9.1 list already carries it).
+- Tests: router returns Gemini for `hidden-gems`; R.E.D fallback fires on a vault miss; Gemini-client JSON parse + retry.
+- **Authorised by ADR-002** (D-1 revision, 2026-05-22). Depends on Phase 4 (search path) + Phase 2 (AI infra); not gated on Hawker.
+- Branch: `claude/phase-5-hidden-gems`.
+
+### Phase 6 — Hawker Flow (conditional, 1 PR)
 - Skip unless Cuisine usage data after a week justifies the spend.
 - If green-lit: `src/flows/hawker.json`, static-map rendering, hawker-centre lookup.
-- Branch: `claude/phase-5-hawker`.
+- Branch: `claude/phase-6-hawker`.
 
-### Phase 6 — Telemetry + 24 h soak (1 PR)
+### Phase 7 — Telemetry + 24 h soak (1 PR)
 - Daily cost-aggregator job in `src/ai/telemetry.js`.
 - Per-message latency histogram emitted to logs.
 - 24 h staging soak: assert p50 classifier latency < 250 ms; p50 Stage-A latency < 2.5 s; per-message cost < $0.005.
-- Branch: `claude/phase-6-soak`.
+- Branch: `claude/phase-7-soak`.
 
-### Phase 7 — Out-of-scope decisions documented (1 PR, docs-only)
-- `doc/decisions/001-transport-not-ported.md`, `002-oversight-not-ported.md`, `003-no-prompt-cache.md`, `004-llama-only.md`. Each ADR explains the constraint, the consequence, and the open-door condition for revisiting.
-- Branch: `claude/phase-7-decisions`.
+### Phase 8 — Out-of-scope decisions documented (1 PR, docs-only)
+- `doc/decisions/` ADRs for the not-ported surfaces — transport-not-ported, oversight-not-ported, no-prompt-cache, and a "Llama-only for the main AI layer" ADR that **must reflect ADR-002** (Gemini permitted for the R.E.D path). Each ADR explains the constraint, the consequence, and the open-door condition for revisiting. (ADR file numbers follow the live `doc/decisions/` sequence — 001 and 002 are already taken.)
+- Branch: `claude/phase-8-decisions`.
 
-**Hard stop after Phase 4**: operator approves before Phase 5. The Hawker Flow's static-map rendering is non-trivial spend; don't build it speculatively.
+**Hard stop after Phase 4**: operator approves before Phase 6 (Hawker) — its static-map rendering is non-trivial spend; don't build it speculatively. Phase 5 (Hidden-Gems / R.E.D) is already operator-authorised via ADR-002 and may proceed once Phase 4 lands.
 
 ---
 
@@ -627,9 +643,10 @@ Each phase is independent enough that the operator can pause or redirect between
 | 2 | Llama classifier responds to a curl test in < 300 ms; fallback to Together verified by simulated 429. |
 | 3 | A user can text the test number and get a conversational reply; intent classifier picks `venue` correctly ≥ 90 % on a 50-message smoke set. |
 | 4 | End-to-end: user texts "sushi" → location request → location share → Cuisine Flow opens → submit → top-5 sushi venues message arrives, formatted, with no markup corruption. |
-| 5 | (If reached) End-to-end equivalent for Hawker, with at least one static map per option rendered. |
-| 6 | 24 h soak emits aggregate telemetry; SLOs met. |
-| 7 | ADRs merged and visible in `doc/decisions/`. |
+| 5 | A cuisine search with no vault match returns a Gemini-driven R.E.D hidden-gems suggestion instead of an empty result; the Gemini call is visible in telemetry. |
+| 6 | (If reached) End-to-end equivalent for Hawker, with at least one static map per option rendered. |
+| 7 | 24 h soak emits aggregate telemetry; SLOs met. |
+| 8 | ADRs merged and visible in `doc/decisions/`. |
 
 ---
 
@@ -638,7 +655,7 @@ Each phase is independent enough that the operator can pause or redirect between
 - **Vault bridge**: confirm Option B (submodule) vs revisit to Option A (published package). §8.1.
 - **Llama 4 availability**: by Phase 2 timing, is Llama 4 Maverick GA on Groq? If yes, swap Stage-A to it; revise §7.2.
 - **Tavily vs Serper vs Google Custom Search** for the web-search tool. §7.4. Default Tavily unless operator prefers otherwise.
-- **Hawker phase gate** (§12 Phase 5): what usage metric green-lights the build?
+- **Hawker phase gate** (§12 Phase 6): what usage metric green-lights the build?
 - **Cross-transport identity linking**: confirm out-of-scope. §4.6.
 - **Free-tier limits on the Meta test number**: 5 recipient WA accounts may bottleneck Phase 4 manual smoke; do we provision the production number earlier?
 
@@ -689,7 +706,7 @@ If any check fails, **stop and tell the operator which layer is blocked** (proxy
 
 - Any deviation from this plan that affects an operator directive (§2 D-1 through D-6).
 - Any module that requires reading from `ang-kl/gia` outside the §8.1 bridge.
-- Phase 5 entry (operator gate).
+- Phase 6 entry (Hawker — operator gate).
 - Anything that would publish a Flow to `PUBLISHED` for the first time (manual operator action).
 - Anything that touches WhatsApp template approval (latency is hours-to-days, plan accordingly).
 
