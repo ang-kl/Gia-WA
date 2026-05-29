@@ -11,8 +11,15 @@
 
 import express from 'express';
 import { verifyHubSignature } from './src/flows/sign.js';
+import { onMessage as defaultHandler } from './src/handlers/onMessage.js';
+import * as defaultWa from './src/transport/whatsapp.js';
 
-export function buildApp({ appSecret = process.env.WA_APP_SECRET, verifyToken = process.env.WA_VERIFY_TOKEN } = {}) {
+export function buildApp({
+  appSecret = process.env.WA_APP_SECRET,
+  verifyToken = process.env.WA_VERIFY_TOKEN,
+  wa = defaultWa,
+  handler = defaultHandler,
+} = {}) {
   const app = express();
 
   // Capture the raw body for signature verification on the webhook routes.
@@ -44,15 +51,18 @@ export function buildApp({ appSecret = process.env.WA_APP_SECRET, verifyToken = 
     return res.status(403).send('Forbidden');
   });
 
-  // Inbound messages + nfm_reply. Signature-verified; handler dispatch in Phase 3+.
+  // Inbound messages + nfm_reply. Signature-verified; dispatches to handler.
   app.post('/webhook', (req, res) => {
     const sigHeader = req.get('x-hub-signature-256');
     if (!verifyHubSignature(req.rawBody, sigHeader, appSecret)) {
       return res.status(401).send('Invalid signature');
     }
-    // Always 200 quickly per Meta's guidance; processing is enqueued.
-    // Handler dispatch is added in Phase 3 (onMessage, onLocation, onFlowReply).
-    return res.status(200).send('OK');
+    // Respond immediately per Meta's guidance; processing is fire-and-forget.
+    res.status(200).send('OK');
+    const messages = req.body?.entry?.[0]?.changes?.[0]?.value?.messages ?? [];
+    for (const msg of messages) {
+      handler(msg, wa).catch((err) => console.error('[webhook]', err.message));
+    }
   });
 
   // Encrypted Flow Data Channel. Signature-verified; crypto + handler land Phase 4.

@@ -74,18 +74,93 @@ export async function sendText(to, body, opts = {}) {
   );
 }
 
-// ---------- Stubs (Phase 3+) ----------
-
-export async function sendButtons(/* to, body, buttons */) {
-  throw new Error('sendButtons: not implemented (Phase 3)');
+/**
+ * Send an interactive button message (max 3 buttons).
+ * @param {string} to
+ * @param {string} body
+ * @param {Array<{id: string, title: string}>} buttons
+ */
+export async function sendButtons(to, body, buttons) {
+  if (typeof to !== 'string' || !to) throw new TypeError('sendButtons: to required');
+  if (typeof body !== 'string' || !body) throw new TypeError('sendButtons: body required');
+  if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
+    throw new RangeError('sendButtons: 1–3 buttons required');
+  }
+  const env = readEnv();
+  return postWithRetry(
+    baseUrl(env),
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to.replace(/^\+/, ''),
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: body },
+        action: {
+          buttons: buttons.map((b) => ({
+            type: 'reply',
+            reply: { id: b.id, title: b.title },
+          })),
+        },
+      },
+    },
+    env.token,
+  );
 }
 
-export async function sendList(/* to, body, button, sections */) {
-  throw new Error('sendList: not implemented (Phase 3)');
+/**
+ * Send an interactive list message (up to 10 rows across sections).
+ * @param {string} to
+ * @param {string} body
+ * @param {Array<{title?: string, rows: Array<{id: string, title: string, description?: string}>}>} sections
+ */
+export async function sendList(to, body, sections) {
+  if (typeof to !== 'string' || !to) throw new TypeError('sendList: to required');
+  if (typeof body !== 'string' || !body) throw new TypeError('sendList: body required');
+  if (!Array.isArray(sections) || sections.length === 0) throw new TypeError('sendList: sections required');
+  const env = readEnv();
+  return postWithRetry(
+    baseUrl(env),
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to.replace(/^\+/, ''),
+      type: 'interactive',
+      interactive: {
+        type: 'list',
+        body: { text: body },
+        action: { button: 'View options', sections },
+      },
+    },
+    env.token,
+  );
 }
 
-export async function sendLocationRequest(/* to, body */) {
-  throw new Error('sendLocationRequest: not implemented (Phase 3)');
+/**
+ * Ask the user to share their location via the native WhatsApp location picker.
+ * @param {string} to
+ * @param {string} body  — prompt text shown above the "Send location" button
+ */
+export async function sendLocationRequest(to, body) {
+  if (typeof to !== 'string' || !to) throw new TypeError('sendLocationRequest: to required');
+  if (typeof body !== 'string' || !body) throw new TypeError('sendLocationRequest: body required');
+  const env = readEnv();
+  return postWithRetry(
+    baseUrl(env),
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to.replace(/^\+/, ''),
+      type: 'interactive',
+      interactive: {
+        type: 'location_request_message',
+        body: { text: body },
+        action: { name: 'send_location' },
+      },
+    },
+    env.token,
+  );
 }
 
 export async function openFlow(/* to, flowId, flowToken, initialScreen, data */) {
