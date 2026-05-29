@@ -2,7 +2,7 @@ counters:
   commit: 9
   build: 0
   documents:
-    journal: 8
+    journal: 9
     register: 0
     decisions: 3
 sessions:
