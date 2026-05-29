@@ -1,12 +1,12 @@
 counters:
-  commit: 9
+  commit: 11
   build: 0
   documents:
-    journal: 9
+    journal: 13
     register: 0
     decisions: 3
 sessions:
-  current_chat_id: 2026-05-22-doc-conformance
+  current_chat_id: 2026-05-29-phase3
   current_chat_counter: 1
 last_anchor_time: 29-05_26 15:10 SGT
 last_anchor_source: nea_data_gov_sg
