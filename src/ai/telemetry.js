@@ -4,16 +4,12 @@
 const LIST_KEY = 'wa:telemetry:calls';
 const MAX_ENTRIES = 10000;
 
-// USD per 1M tokens — update as provider pricing changes.
+// USD per 1M tokens — update as Google pricing changes.
 const COST_PER_1M = {
-  groq: {
-    'llama-3.1-8b-instant':    { input: 0.05, output: 0.08 },
-    'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
-  },
-  together: {
-    'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo':      { input: 0.18, output: 0.18 },
-    'meta-llama/Llama-3.3-70B-Instruct-Turbo':           { input: 0.88, output: 0.88 },
-    'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo':   { input: 0.18, output: 0.18 },
+  gemini: {
+    'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+    'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+    'gemini-2.5-pro':   { input: 1.25, output: 10.00 },
   },
 };
 
